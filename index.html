@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mapa Interactivo GIS & Visión Mundial - KOICA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Leaflet CSS & JS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: "Inter", Arial, sans-serif;
+      }
+      body {
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+        background: #f8fafc;
+        color: #1e293b;
+      }
+      @keyframes slideIn {
+        from { transform: translateY(100%); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+      }
+      .toast-notification {
+        animation: slideIn 0.3s ease-out forwards;
+      }
+    </style>
+  </head>
+  <body class="bg-gray-50 text-gray-800 font-sans min-h-screen flex flex-col">
+    <!-- Notificación Flotante -->
+    <div id="toast-alert" class="fixed bottom-6 right-6 z-50 hidden transform transition-all duration-300">
+      <div class="bg-emerald-600 text-white px-5 py-3 rounded-2xl shadow-xl flex items-center gap-3 border border-emerald-500 toast-notification">
+        <span class="text-xl">✅</span>
+        <div>
+          <h4 class="font-bold text-sm">¡Acción realizada con éxito!</h4>
+          <p class="text-xs text-emerald-100" id="toast-msg">Operación completada correctamente.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Header Institucional Elegante y Centrado -->
+    <header class="bg-white/95 backdrop-blur-md shadow-sm border-b border-gray-200 sticky top-0 z-40">
+      <div class="max-w-7xl mx-auto px-4 py-3 flex flex-col items-center justify-center gap-3">
+        
+        <!-- Contenedor Uniforme de Logos (Centrado) -->
+        <div class="flex items-center justify-center bg-gray-50 px-5 py-2 rounded-2xl border border-gray-100 shadow-sm gap-4">
+          <img
+            src="https://lh3.googleusercontent.com/d/1s50cSDpxq_Y7FmAvVEXP5fMrKDSNCJYT"
+            alt="KOICA Logo"
+            class="h-7 sm:h-8 w-auto object-contain"
+          />
+          <div class="h-5 w-px bg-gray-300"></div>
+          <img
+            src="https://lh3.googleusercontent.com/d/1lxonlJdF6Foe0J3SM6h_olLYtkbAl9ik"
+            alt="World Vision Logo"
+            class="h-7 sm:h-8 w-auto object-contain"
+          />
+        </div>
+
+        <!-- Botones de Navegación -->
+        <div class="flex flex-wrap items-center justify-center gap-2 w-full max-w-2xl">
+          <button
+            type="button"
+            onclick="switchTab('map')"
+            id="btn-tab-map"
+            class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-blue-600 text-white shadow-sm hover:bg-blue-700 transition"
+          >
+            Mapa y Galería
+          </button>
+          <button
+            type="button"
+            onclick="switchTab('indicators')"
+            id="btn-tab-indicators"
+            class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition"
+          >
+            Indicadores
+          </button>
+          <a
+            href="https://wvi365.sharepoint.com/:f:/s/koica-spp/IgCK_uWw5SYsS4zMlwjsyRToAcKBbt9b7leDXgwGaAxrw8k?e=XacJhO"
+            target="_blank"
+            class="bg-amber-600 hover:bg-amber-700 text-white px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold shadow-sm transition flex items-center gap-1.5"
+          >
+            📁 Subir Testimonio
+          </a>
+          <button
+            type="button"
+            onclick="openModal()"
+            class="bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold shadow-sm transition"
+          >
+            + Nueva Evidencia
+          </button>
+        </div>
+
+      </div>
+    </header>
+
+    <!-- Contenido Principal -->
+    <main class="flex-grow max-w-7xl mx-auto px-4 py-6 w-full space-y-6 overflow-y-auto">
+      <div class="bg-gradient-to-r from-blue-900 to-blue-700 text-white p-6 rounded-2xl shadow-md flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 class="text-2xl font-extrabold tracking-wide">Plataforma GIS Interactiva de Evidencias</h1>
+          <p class="text-blue-100 text-sm mt-1">Sube fotos y videos para sincronizarlos automáticamente al sistema.</p>
+        </div>
+        <div class="bg-white/10 backdrop-blur-md px-4 py-2 rounded-xl border border-white/20 text-xs flex items-center gap-3">
+          <span><span id="total-communities-count">0</span> Centros GIS</span>
+          <span>•</span>
+          <span><span id="total-media-count">0</span> Evidencias Multimedia</span>
+        </div>
+      </div>
+
+      <!-- VISTA 1: MAPA Y GALERÍA -->
+      <div id="view-map" class="space-y-6">
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3">
+          <div class="flex justify-between items-center px-1">
+            <h2 class="text-base font-bold text-gray-900">Mapa Dinámico</h2>
+            <span class="text-xs text-gray-500 font-medium">Haz clic en los marcadores para gestionar evidencias</span>
+          </div>
+          <div id="gis-map" class="w-full h-[450px] rounded-xl shadow-inner z-10 border border-gray-200"></div>
+        </div>
+
+        <!-- Filtros -->
+        <div class="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+          <div class="w-full md:w-1/3">
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Filtrar por Centro de Salud</label>
+            <select id="community-filter" onchange="renderGrid()" class="w-full px-3 py-2 border rounded-xl text-sm outline-none bg-white font-medium">
+              <option value="all">Todos los Centros</option>
+            </select>
+          </div>
+          <div class="w-full md:w-1/3">
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Filtrar por Actividad</label>
+            <select id="activity-filter" onchange="renderGrid()" class="w-full px-3 py-2 border rounded-xl text-sm outline-none bg-white font-medium">
+              <option value="all">Todas las Actividades</option>
+            </select>
+          </div>
+          <div class="w-full md:w-1/3">
+            <label class="block text-xs font-semibold text-gray-500 uppercase mb-1">Búsqueda Rápida</label>
+            <input type="text" id="search-input" oninput="renderGrid()" placeholder="Buscar título..." class="w-full px-3 py-2 border rounded-xl text-sm outline-none" />
+          </div>
+        </div>
+
+        <div class="flex justify-between items-center border-b pb-2 pt-2">
+          <h2 class="text-lg font-bold text-gray-900">Galería de Evidencias</h2>
+          <span id="gallery-count" class="text-xs font-semibold bg-gray-200 text-gray-700 px-2.5 py-1 rounded-full">0 registros</span>
+        </div>
+
+        <div id="media-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+      </div>
+
+      <!-- VISTA 2: INDICADORES -->
+      <div id="view-indicators" class="space-y-6 hidden">
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+          <div class="flex justify-between items-center mb-4 border-b pb-3">
+            <h2 class="text-lg font-bold text-gray-900">Matriz de Indicadores del Proyecto</h2>
+            <span class="bg-blue-50 text-blue-700 text-xs font-bold px-3 py-1.5 rounded-xl">Total: 10 Indicadores</span>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-gray-100 text-gray-700 text-xs uppercase font-semibold">
+                  <th class="p-3 rounded-l-xl">Código</th>
+                  <th class="p-3">Descripción</th>
+                  <th class="p-3 text-center">Valor / Meta</th>
+                  <th class="p-3 rounded-r-xl text-center">Estado</th>
+                </tr>
+              </thead>
+              <tbody id="indicators-table-body" class="divide-y divide-gray-100"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Modal para Agregar/Editar Multimedia -->
+    <div id="media-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+      <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl relative max-h-[90vh] overflow-y-auto">
+        <div class="flex justify-between items-center mb-4 border-b pb-3">
+          <h3 id="modal-title-text" class="text-lg font-bold text-gray-900">Registrar Evidencia</h3>
+          <button type="button" onclick="closeModal()" class="text-gray-400 hover:text-gray-600 font-bold">✕</button>
+        </div>
+        <form id="media-form" onsubmit="handleFormSubmit(event)" class="space-y-4">
+          <input type="hidden" id="modal-edit-id" />
+          
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Centro de Salud / Ubicación (Opcional)</label>
+            <select id="modal-community" class="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium">
+              <option value="">-- Sin centro específico / General --</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Título de la Evidencia</label>
+            <input type="text" id="modal-title" required placeholder="Ej. Entrevista comunidad..." class="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Actividad / Indicador</label>
+            <select id="modal-activity" required class="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"></select>
+          </div>
+          
+          <!-- Selección de Archivo (Foto o Video) -->
+          <div class="bg-gray-50 p-3 rounded-xl border border-gray-200 space-y-3">
+            <div>
+              <label class="block text-xs font-semibold uppercase text-gray-700 mb-1">Archivo Multimedia (Foto o Video)</label>
+              <input type="file" id="modal-file-input" accept="image/*,video/*" onchange="previewFile(this)" class="w-full px-3 py-2 border rounded-xl text-xs bg-white cursor-pointer" />
+              <p class="text-[10px] text-gray-500 mt-1">Recomendación para videos: Procura que duren pocos segundos o pesen menos de 25MB para asegurar una subida fluida.</p>
+            </div>
+            <div id="preview-container" class="hidden mt-2 text-center">
+              <span class="block text-[11px] text-gray-500 mb-1 font-semibold">Vista previa:</span>
+              <div id="preview-element-wrapper"></div>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold uppercase text-gray-600 mb-1">Descripción corta</label>
+            <textarea id="modal-desc" rows="2" placeholder="Detalles..." class="w-full px-3 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none"></textarea>
+          </div>
+          <div class="flex justify-end gap-3 pt-2">
+            <button type="button" onclick="closeModal()" class="px-4 py-2 rounded-xl text-sm font-medium border text-gray-600 hover:bg-gray-100">Cancelar</button>
+            <button type="submit" id="btn-submit-evidencia" class="px-5 py-2 rounded-xl text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 shadow">Guardar Evidencia</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Script General -->
+    <script>
+      const communitiesData = [
+        { id: 1, name: "César Moscoso", municipality: "Riberalta", lat: -10.9979, lon: -66.0789 },
+        { id: 2, name: "23 de Marzo", municipality: "Riberalta", lat: -11.0420, lon: -66.0363 },
+        { id: 3, name: "La Unidad Fauvel", municipality: "Riberalta", lat: -11.0178, lon: -66.0489 },
+        { id: 4, name: "La Esperanza", municipality: "Riberalta", lat: -11.0641, lon: -66.0562 },
+        { id: 5, name: "Cerrito", municipality: "Riberalta", lat: -11.0158, lon: -66.0756 },
+        { id: 6, name: "San Gabriel", municipality: "Guayaramerín", lat: -10.8066, lon: -65.3528 },
+        { id: 7, name: "Guayaraguazú", municipality: "Guayaramerín", lat: -10.8250, lon: -65.3600 },
+        { id: 8, name: "San Joaquín", municipality: "Guayaramerín", lat: -10.8315, lon: -65.3640 },
+        { id: 9, name: "Los Almendros", municipality: "Guayaramerín", lat: -10.8351, lon: -65.3628 }
+      ];
+
+      const indicatorsData = [
+        { code: "1.1-1", title: "Número de comunidades con grupos comunitarios (#)", value: "12 comunidades" },
+        { code: "1.1-2", title: "Número de miembros capacitados en gestión ambiental (#)", value: "450 personas" },
+        { code: "1.2-1", title: "Número de viviendas renovadas (#)", value: "85 viviendas" },
+        { code: "1.2-2", title: "Hogares que recibieron control de vectores (#)", value: "6,418 hogares" },
+        { code: "1.3-1", title: "Personas con acceso a agua potable segura (#)", value: "2,150 beneficiarios" },
+        { code: "2.1-1", title: "Centros con instalaciones de agua y saneamiento (#)", value: "11 centros" },
+        { code: "2.1-2", title: "Provisión de equipamiento de salud", value: "100%" },
+        { code: "2.2-1", title: "Personas atendidas en clínicas móviles (#)", value: "3,756 atenciones" },
+        { code: "2.3-1", title: "Personal capacitado en salud climática (#)", value: "45 profesionales" },
+        { code: "3.1-1", title: "Centros con reporte completo de enfermedades (#)", value: "11 de 11" }
+      ];
+
+      let mediaData = JSON.parse(localStorage.getItem("gis_media_data")) || [];
+      let map;
+      let tempFilePayload = { data: "", type: "", name: "" };
+
+      const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzXBuptExNQyZohscVU_v05kPUNdvYCudD8-H-PEg6FGs73qb3SxJqsyhvVhaxRnI2oBA/exec";
+
+      function initApp() {
+        document.getElementById("total-communities-count").innerText = communitiesData.length;
+        populateDropdowns();
+        initMap();
+        renderIndicatorsTable();
+        refreshMapMarkers();
+        renderGrid();
+        document.getElementById("total-media-count").innerText = mediaData.length;
+      }
+
+      function showToast(message) {
+        const toast = document.getElementById("toast-alert");
+        document.getElementById("toast-msg").innerText = message;
+        toast.classList.remove("hidden");
+        setTimeout(() => toast.classList.add("hidden"), 4000);
+      }
+
+      function initMap() {
+        map = L.map("gis-map").setView([-10.91, -65.71], 10);
+        L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19 }).addTo(map);
+      }
+
+      function refreshMapMarkers() {
+        if (window.markersLayer) window.markersLayer.clearLayers();
+        else window.markersLayer = L.layerGroup().addTo(map);
+
+        communitiesData.forEach((c) => {
+          const communityMedia = mediaData.filter((m) => m.community === c.name);
+          let mediaHtml = communityMedia.length > 0
+            ? communityMedia.map((m) => `<div style="margin-top: 4px;"><b style="font-size:11px;">${m.title}</b></div>`).join("")
+            : `<div style="font-size: 11px; color: #9ca3af; font-style: italic;">Sin evidencias</div>`;
+
+          const marker = L.marker([c.lat, c.lon]);
+          marker.bindPopup(`
+            <div style="padding: 2px; max-width: 200px;">
+              <b style="color: #1e40af; font-size: 13px;">${c.name}</b><br>
+              <span style="font-size: 11px; color: #64748b;">${c.municipality}</span>
+              <div style="margin: 6px 0; max-height: 100px; overflow-y: auto;">${mediaHtml}</div>
+              <button type="button" onclick="openModalForCommunity('${c.name}')" style="width: 100%; background: #059669; color: white; border: none; padding: 4px; border-radius: 6px; font-size: 11px; font-weight: bold; cursor: pointer;">+ Añadir Evidencia</button>
+            </div>
+          `);
+          window.markersLayer.addLayer(marker);
+        });
+      }
+
+      function switchTab(tab) {
+        const mapView = document.getElementById("view-map");
+        const indicatorsView = document.getElementById("view-indicators");
+        const btnMap = document.getElementById("btn-tab-map");
+        const btnIndicators = document.getElementById("btn-tab-indicators");
+
+        if (tab === "map") {
+          mapView.classList.remove("hidden");
+          indicatorsView.classList.add("hidden");
+          btnMap.className = "px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-blue-600 text-white shadow-sm transition";
+          btnIndicators.className = "px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition";
+          setTimeout(() => map.invalidateSize(), 200);
+        } else {
+          mapView.classList.add("hidden");
+          indicatorsView.classList.remove("hidden");
+          btnIndicators.className = "px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-blue-600 text-white shadow-sm transition";
+          btnMap.className = "px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition";
+        }
+      }
+
+      function populateDropdowns() {
+        const commFilter = document.getElementById("community-filter");
+        const modalComm = document.getElementById("modal-community");
+        
+        let filterHtml = '<option value="all">Todos los Centros</option>';
+        let modalHtml = '<option value="">-- Sin centro específico / General --</option>';
+
+        communitiesData.forEach((c) => {
+          filterHtml += `<option value="${c.name}">${c.name} (${c.municipality})</option>`;
+          modalHtml += `<option value="${c.name}">${c.name} (${c.municipality})</option>`;
+        });
+
+        commFilter.innerHTML = filterHtml;
+        modalComm.innerHTML = modalHtml;
+
+        const actFilter = document.getElementById("activity-filter");
+        const modalActivity = document.getElementById("modal-activity");
+        let actHtml = '<option value="all">Todas las Actividades</option>';
+        let modalActHtml = '';
+
+        indicatorsData.forEach((ind) => {
+          actHtml += `<option value="${ind.title}">${ind.code} - ${ind.title}</option>`;
+          modalActHtml += `<option value="${ind.title}">${ind.code} - ${ind.title}</option>`;
+        });
+
+        actFilter.innerHTML = actHtml;
+        modalActivity.innerHTML = modalActHtml;
+      }
+
+      function renderIndicatorsTable() {
+        document.getElementById("indicators-table-body").innerHTML = indicatorsData.map((ind) => `
+            <tr class="hover:bg-gray-50 transition">
+                <td class="p-3 font-mono font-bold text-blue-600 text-xs">${ind.code}</td>
+                <td class="p-3 text-gray-800 text-xs font-medium">${ind.title}</td>
+                <td class="p-3 text-center text-xs font-semibold text-gray-700">${ind.value}</td>
+                <td class="p-3 text-center"><span class="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-1 rounded-full">Activo</span></td>
+            </tr>
+        `).join("");
+      }
+
+      function renderGrid() {
+        const grid = document.getElementById("media-grid");
+        const selectedComm = document.getElementById("community-filter").value;
+        const selectedAct = document.getElementById("activity-filter").value;
+        const searchTerm = document.getElementById("search-input").value.toLowerCase();
+
+        const filtered = mediaData.filter((item) => {
+          const matchComm = selectedComm === "all" || item.community === selectedComm || (!item.community && selectedComm === "");
+          const matchAct = selectedAct === "all" || item.activity === selectedAct;
+          const matchSearch = item.title.toLowerCase().includes(searchTerm) || (item.desc && item.desc.toLowerCase().includes(searchTerm));
+          return matchComm && matchAct && matchSearch;
+        });
+
+        document.getElementById("gallery-count").innerText = `${filtered.length} registro(s)`;
+
+        if (filtered.length === 0) {
+          grid.innerHTML = `<div class="col-span-full text-center py-12 bg-white rounded-2xl border border-dashed border-gray-300"><p class="text-gray-500 text-sm">No se encontraron evidencias multimedia.</p></div>`;
+          return;
+        }
+
+        grid.innerHTML = filtered.map((item) => {
+          const isVideo = item.mediaType && item.mediaType.startsWith("video");
+          const mediaElement = isVideo 
+            ? `<video src="${item.url}" controls class="w-full h-full object-cover"></video>`
+            : `<img src="${item.url}" alt="${item.title}" class="w-full h-full object-cover">`;
+
+          return `
+            <div class="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col transition hover:shadow-md relative">
+                <div class="relative h-48 bg-gray-900">
+                    ${mediaElement}
+                    <span class="absolute top-3 left-3 bg-black/65 backdrop-blur-md text-white text-xs px-2.5 py-1 rounded-lg font-medium">
+                        ${item.community || 'General'}
+                    </span>
+                    <div class="absolute top-3 right-3 flex gap-1">
+                        <button type="button" onclick="deleteItem('${item.id}')" class="bg-red-600 hover:bg-red-700 text-white p-2 rounded-lg shadow text-xs" title="Eliminar">🗑️</button>
+                    </div>
+                </div>
+                <div class="p-4 flex flex-col flex-grow">
+                    <span class="text-[11px] font-bold uppercase text-blue-600 bg-blue-50 px-2 py-0.5 rounded mb-1">${item.activity}</span>
+                    <h3 class="font-bold text-gray-900 text-base mb-1">${item.title}</h3>
+                    <p class="text-gray-600 text-xs flex-grow mb-3">${item.desc || 'Sin descripción'}</p>
+                </div>
+            </div>
+          `;
+        }).join("");
+      }
+
+      function previewFile(input) {
+        if (input.files && input.files[0]) {
+          const file = input.files[0];
+          
+          if (file.size > 30 * 1024 * 1024) {
+            alert("El archivo pesa más de 30MB. Los videos muy pesados pueden tener problemas de red en navegadores móviles. Te recomendamos un video más ligero.");
+          }
+
+          const reader = new FileReader();
+          document.getElementById("preview-element-wrapper").innerHTML = `<p class="text-xs text-blue-600 font-medium py-4">Procesando archivo multimedia...</p>`;
+          document.getElementById("preview-container").classList.remove("hidden");
+
+          reader.onload = function (e) {
+            tempFilePayload = { 
+              data: e.target.result, 
+              type: file.type || "video/mp4",
+              name: file.name 
+            };
+            const isVid = file.type.startsWith("video");
+            document.getElementById("preview-element-wrapper").innerHTML = isVid
+              ? `<video src="${e.target.result}" controls class="mx-auto h-32 w-full object-cover rounded-lg border"></video>`
+              : `<img src="${e.target.result}" class="mx-auto h-32 object-cover rounded-lg border" />`;
+          };
+          reader.readAsDataURL(file);
+        }
+      }
+
+      function openModal() {
+        document.getElementById("modal-edit-id").value = "";
+        document.getElementById("modal-title-text").innerText = "Registrar Nueva Evidencia";
+        document.getElementById("media-form").reset();
+        document.getElementById("preview-container").classList.add("hidden");
+        tempFilePayload = { data: "", type: "", name: "" };
+        document.getElementById("media-modal").classList.remove("hidden");
+      }
+
+      function openModalForCommunity(communityName) {
+        openModal();
+        document.getElementById("modal-community").value = communityName;
+      }
+
+      function closeModal() {
+        document.getElementById("media-modal").classList.add("hidden");
+      }
+
+      async function handleFormSubmit(e) {
+        e.preventDefault();
+        const community = document.getElementById("modal-community").value || "General";
+        const title = document.getElementById("modal-title").value;
+        const activity = document.getElementById("modal-activity").value;
+        const desc = document.getElementById("modal-desc").value;
+        
+        const fileInput = document.getElementById("modal-file-input");
+
+        if (!tempFilePayload.data && fileInput.files && fileInput.files[0]) {
+          alert("El archivo aún se está cargando en la memoria. Por favor espera 2 segundos más y vuelve a hacer clic en Guardar.");
+          return;
+        }
+
+        if (!tempFilePayload.data) {
+          alert("Por favor selecciona una foto o un video válido.");
+          return;
+        }
+
+        showToast("Subiendo archivo...");
+
+        const payload = {
+          id: Date.now().toString(),
+          community: community,
+          title: title,
+          activity: activity,
+          desc: desc,
+          fileName: tempFilePayload.name || ("evidencia_" + Date.now() + ".mp4"),
+          mimeType: tempFilePayload.type || "video/mp4",
+          fileData: tempFilePayload.data
+        };
+
+        try {
+          await fetch(WEB_APP_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          showToast("¡Archivo sincronizado con éxito!");
+        } catch (err) {
+          console.error("Error al sincronizar:", err);
+          showToast("Guardado localmente (Verifique conexión)");
+        }
+
+        const newItem = { id: payload.id, community, title, activity, url: tempFilePayload.data, mediaType: payload.mimeType, desc };
+        mediaData.push(newItem);
+        localStorage.setItem("gis_media_data", JSON.stringify(mediaData));
+
+        closeModal();
+        document.getElementById("total-media-count").innerText = mediaData.length;
+        refreshMapMarkers();
+        renderGrid();
+      }
+
+      function deleteItem(id) {
+        if (confirm("¿Estás seguro de eliminar este registro?")) {
+          mediaData = mediaData.filter(item => item.id !== id);
+          localStorage.setItem("gis_media_data", JSON.stringify(mediaData));
+          document.getElementById("total-media-count").innerText = mediaData.length;
+          refreshMapMarkers();
+          renderGrid();
+          showToast("Registro eliminado correctamente.");
+        }
+      }
+
+      initApp();
+    </script>
+  </body>
+</html>
